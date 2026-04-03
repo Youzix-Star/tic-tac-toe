@@ -1,386 +1,183 @@
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    user-select: none;
-}
+import { checkGameStatus, makeMove } from './gameLogic.js';
+import { getBestAIMove } from './ai.js';
+import { UIManager } from './uiManager.js';
 
-body {
-    background: #f5f7fb;
-    font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-    margin: 0;
-}
+// ---------- 游戏状态 ----------
+let board = Array(9).fill(null);
+let isXTurn = true;
+let gameActive = true;
+let winnerCombo = null;
+let gameMode = 'twoPlayer';   // 'twoPlayer', 'vsAI', 'online'
+let aiTimer = null;
 
-.game-container {
-    max-width: 600px;
-    width: 100%;
-    background: #ffffff;
-    border-radius: 36px;
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.02);
-    transition: all 0.2s ease;
-    padding: 28px 24px 36px;
-}
+const ui = new UIManager();
 
-.game-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 20px;
-    gap: 12px;
-}
-
-h1 {
-    font-size: 1.9rem;
-    font-weight: 700;
-    background: linear-gradient(135deg, #202124, #3c4043);
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-    letter-spacing: -0.3px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-h1::before {
-    content: "🎮";
-    background: none;
-    -webkit-background-clip: unset;
-    color: #5f6368;
-}
-
-/* 模式切换滑动胶囊 */
-.mode-slider-container {
-    background: #e8eaed;
-    border-radius: 48px;
-    padding: 4px;
-    width: 280px;
-    position: relative;
-    display: flex;
-    cursor: default;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.02);
-}
-.mode-slider-options {
-    display: flex;
-    width: 100%;
-    position: relative;
-    z-index: 2;
-}
-.mode-option {
-    flex: 1;
-    text-align: center;
-    padding: 6px 0;
-    font-weight: 500;
-    font-size: 0.85rem;
-    border-radius: 40px;
-    transition: color 0.2s ease;
-    z-index: 3;
-    cursor: pointer;
-    color: #5f6368;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-.mode-slider-container.active-twoPlayer .mode-option[data-mode="twoPlayer"],
-.mode-slider-container.active-vsAI .mode-option[data-mode="vsAI"],
-.mode-slider-container.active-online .mode-option[data-mode="online"] {
-    color: #ffffff;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    font-weight: 600;
-}
-.mode-slider-bg {
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    width: calc(33.33% - 4px);
-    height: calc(100% - 8px);
-    background: #1a73e8;
-    border-radius: 40px;
-    transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
-    z-index: 1;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-}
-.mode-slider-container.active-vsAI .mode-slider-bg {
-    transform: translateX(100%);
-}
-.mode-slider-container.active-online .mode-slider-bg {
-    transform: translateX(200%);
-}
-.mode-slider-container.active-twoPlayer .mode-slider-bg {
-    transform: translateX(0%);
-}
-
-.action-group {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-}
-
-.reset-btn, .ai-first-btn {
-    background: rgba(26, 115, 232, 0.08);
-    border: none;
-    font-family: 'Roboto', sans-serif;
-    font-weight: 500;
-    font-size: 0.85rem;
-    padding: 8px 18px;
-    border-radius: 40px;
-    color: #1a73e8;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.2s ease;
-    backdrop-filter: blur(4px);
-}
-
-.reset-btn:hover, .ai-first-btn:hover {
-    background: rgba(26, 115, 232, 0.16);
-    transform: scale(0.97);
-}
-
-.status-area {
-    background: #f8f9fa;
-    border-radius: 60px;
-    padding: 12px 20px;
-    margin: 16px 0 28px 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.02), 0 2px 4px rgba(0,0,0,0.02);
-}
-
-.turn-indicator {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    font-weight: 500;
-}
-
-.turn-label {
-    color: #5f6368;
-    font-size: 0.95rem;
-}
-
-/* 玩家滑动胶囊 */
-.players-slider-container {
-    background: #e8eaed;
-    border-radius: 48px;
-    padding: 4px;
-    width: 140px;
-    position: relative;
-    display: flex;
-    cursor: default;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.02);
-}
-
-.slider-options {
-    display: flex;
-    width: 100%;
-    position: relative;
-    z-index: 2;
-}
-
-.player-option {
-    flex: 1;
-    text-align: center;
-    padding: 6px 0;
-    font-weight: 700;
-    font-size: 1.1rem;
-    border-radius: 40px;
-    transition: color 0.2s ease;
-    z-index: 3;
-    cursor: default;
-    letter-spacing: 0.5px;
-}
-
-.player-option.x-opt {
-    color: #b85c4a;
-}
-.player-option.o-opt {
-    color: #4c8fbf;
-}
-
-.players-slider-container.active-x .player-option.x-opt,
-.players-slider-container.active-o .player-option.o-opt {
-    color: white;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-
-.slider-bg {
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    width: calc(50% - 4px);
-    height: calc(100% - 8px);
-    background: #e34234;
-    border-radius: 40px;
-    transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1), background 0.2s;
-    z-index: 1;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-}
-
-.players-slider-container.active-o .slider-bg {
-    transform: translateX(100%);
-    background: #1e88e5;
-}
-
-.players-slider-container.active-x .slider-bg {
-    transform: translateX(0%);
-    background: #e34234;
-}
-
-.status-message {
-    font-size: 0.85rem;
-    font-weight: 500;
-    background: #e8eaed;
-    padding: 6px 16px;
-    border-radius: 32px;
-    color: #3c4043;
-}
-
-.board {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
-    margin-bottom: 28px;
-}
-
-.cell {
-    aspect-ratio: 1 / 1;
-    background: #ffffff;
-    border-radius: 28px;
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: clamp(2.8rem, 12vw, 5rem);
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1);
-    border: 1px solid rgba(0, 0, 0, 0.02);
-}
-
-.cell:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 16px 24px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.02);
-    background: #fefefe;
-}
-
-.cell:active {
-    transform: scale(0.97);
-}
-
-.cell[data-value="X"] {
-    color: #e34234;
-    text-shadow: 0 2px 6px rgba(227, 66, 52, 0.2);
-}
-
-.cell[data-value="O"] {
-    color: #1e88e5;
-    text-shadow: 0 2px 6px rgba(30, 136, 229, 0.2);
-}
-
-.cell.winner-highlight {
-    background: linear-gradient(145deg, #e9f5e9, #d4ecd4);
-    box-shadow: 0 0 0 2px #34a853, 0 12px 24px rgba(52, 168, 83, 0.2);
-    transform: scale(1.01);
-    color: #1e7e34;
-}
-
-.board.inactive .cell {
-    cursor: default;
-}
-
-.footer-note {
-    text-align: center;
-    font-size: 0.75rem;
-    color: #9aa0a6;
-    margin-top: 20px;
-    font-weight: 400;
-    letter-spacing: 0.3px;
-}
-
-@media (max-width: 520px) {
-    .game-container {
-        padding: 20px 18px 28px;
-    }
-    .board {
-        gap: 10px;
-    }
-    .cell {
-        border-radius: 20px;
-    }
-    .players-slider-container {
-        width: 120px;
-    }
-    .mode-slider-container {
-        width: 240px;
-    }
-    .status-message {
-        font-size: 0.7rem;
+// 辅助函数
+function clearAITimer() {
+    if (aiTimer) {
+        clearTimeout(aiTimer);
+        aiTimer = null;
     }
 }
 
-@keyframes gentlePop {
-    0% { transform: scale(0.98); opacity: 0.9; }
-    100% { transform: scale(1); opacity: 1; }
-}
-.board-refresh {
-    animation: gentlePop 0.2s ease-out;
+function updateUIForState() {
+    if (!gameActive) return;
+    const currentPlayer = isXTurn ? 'X' : 'O';
+    ui.updatePlayerSlider(currentPlayer);
+    if (gameMode === 'vsAI') {
+        if (!isXTurn) {
+            ui.setStatusMessage('🤖 AI (O) 思考中 ...');
+        } else {
+            ui.setStatusMessage('🧑 轮到你了 (X)');
+        }
+    } else if (gameMode === 'twoPlayer') {
+        ui.setStatusMessage(`🎲 轮到 ${currentPlayer} 落子`);
+    }
 }
 
-/* 联机面板样式 */
-#onlinePanel {
-    margin-top: 16px;
-    padding: 12px;
-    background: #f1f3f4;
-    border-radius: 24px;
-}
-#onlinePanel input {
-    flex: 1;
-    padding: 8px 12px;
-    border-radius: 40px;
-    border: 1px solid #dadce0;
-    font-family: inherit;
-    font-size: 0.9rem;
-}
-#onlinePanel button {
-    background: rgba(26, 115, 232, 0.08);
-    border: none;
-    font-family: 'Roboto', sans-serif;
-    font-weight: 500;
-    font-size: 0.85rem;
-    padding: 8px 18px;
-    border-radius: 40px;
-    color: #1a73e8;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.2s ease;
-}
-#onlinePanel button:hover {
-    background: rgba(26, 115, 232, 0.16);
-    transform: scale(0.97);
-}
-#onlineRoomDisplay {
-    font-size: 0.9rem;
-    color: #1a73e8;
-    margin-top: 8px;
-}
-#onlineStatus {
-    font-size: 0.8rem;
-    color: #5f6368;
-    margin-top: 4px;
+function handleGameEnd(status) {
+    gameActive = false;
+    if (status.type === 'win') {
+        winnerCombo = status.combo;
+        ui.highlightWinner(winnerCombo);
+        const winnerSymbol = status.winner;
+        let msg = '';
+        if (gameMode === 'vsAI') {
+            if (winnerSymbol === 'X') msg = '🎉 恭喜你获胜！ 🎉';
+            else msg = '🤖 AI 获胜了 ... 再来一局？';
+        } else if (gameMode === 'twoPlayer') {
+            msg = `🏆 玩家 ${winnerSymbol} 获胜！ 🏆`;
+        }
+        ui.setStatusMessage(msg);
+        ui.updatePlayerSlider(winnerSymbol);
+    } else if (status.type === 'draw') {
+        ui.setStatusMessage('🤝 平局！ 势均力敌 🤝');
     }
+    ui.setGameActive(false);
+}
+
+// 本地落子（双人/人机）
+function tryLocalMove(index, playerSymbol) {
+    if (!gameActive) return false;
+    if ((playerSymbol === 'X' && !isXTurn) || (playerSymbol === 'O' && isXTurn)) return false;
+    if (!makeMove(board, index, playerSymbol)) return false;
+
+    ui.updateBoardUI(board);
+    ui.animateCell(index);
+
+    const status = checkGameStatus(board);
+    if (status.type !== 'continue') {
+        handleGameEnd(status);
+        return true;
+    }
+
+    isXTurn = !isXTurn;
+    updateUIForState();
+    return true;
+}
+
+// AI 落子（人机模式）
+function aiMove() {
+    clearAITimer();
+    if (!gameActive || gameMode !== 'vsAI' || isXTurn === true) return;
+    const aiIndex = getBestAIMove(board, 'O', 'X');
+    if (aiIndex !== -1 && board[aiIndex] === null) {
+        tryLocalMove(aiIndex, 'O');
+    }
+}
+
+function triggerAIMove() {
+    if (gameMode !== 'vsAI') return;
+    if (!gameActive) return;
+    if (isXTurn === true) return;
+    clearAITimer();
+    aiTimer = setTimeout(() => aiMove(), 50);
+}
+
+// 重置本地游戏
+function resetLocalGame(aiFirst = false) {
+    clearAITimer();
+    board.fill(null);
+    gameActive = true;
+    winnerCombo = null;
+    ui.clearHighlights();
+    ui.updateBoardUI(board);
+    ui.setGameActive(true);
+
+    if (gameMode === 'twoPlayer') {
+        isXTurn = true;
+        ui.setStatusMessage('✨ 双人对局 · X 先手 ✨');
+        ui.updatePlayerSlider('X');
+    } else if (gameMode === 'vsAI') {
+        if (aiFirst) {
+            isXTurn = false;
+            ui.setStatusMessage('🤖 AI 先手 (O) · 轮到AI思考');
+            ui.updatePlayerSlider('O');
+            setTimeout(() => {
+                if (gameActive && gameMode === 'vsAI' && !isXTurn && board.every(v => v === null)) {
+                    aiMove();
+                }
+            }, 80);
+        } else {
+            isXTurn = true;
+            ui.setStatusMessage('🧑 你先手 (X) · 点击格子开始');
+            ui.updatePlayerSlider('X');
+        }
+    }
+    ui.refreshBoardAnimation();
+}
+
+// 重置入口
+function resetGame(aiFirst = false) {
+    resetLocalGame(aiFirst);
+}
+
+// 切换模式
+function setGameMode(mode) {
+    if (mode === gameMode) return;
+    
+    // 联机模式显示“制作中”提示，不切换模式
+    if (mode === 'online') {
+        ui.setStatusMessage('🌐 联机模式正在制作中，敬请期待！');
+        return;
+    }
+
+    gameMode = mode;
+    ui.updateModeSlider(mode);
+    ui.setAIButtonVisible(mode === 'vsAI');
+    resetLocalGame(false);
+}
+
+// 点击格子
+function onCellClick(index) {
+    if (!gameActive) return;
+    if (gameMode === 'twoPlayer') {
+        const currentPlayer = isXTurn ? 'X' : 'O';
+        tryLocalMove(index, currentPlayer);
+    } else if (gameMode === 'vsAI') {
+        if (isXTurn === true && board[index] === null) {
+            if (tryLocalMove(index, 'X')) triggerAIMove();
+        }
+    }
+    // online 模式已被拦截，不会执行到此
+}
+
+// 初始化
+function init() {
+    ui.createBoard(onCellClick);
+    ui.bindReset(() => resetGame(false));
+    ui.bindAIFirst(() => { if (gameMode === 'vsAI') resetGame(true); });
+
+    // 模式切换监听
+    document.querySelectorAll('.mode-option').forEach(opt => {
+        opt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const mode = opt.getAttribute('data-mode');
+            setGameMode(mode);
+        });
+    });
+
+    setGameMode('twoPlayer');
+}
+
+init();
