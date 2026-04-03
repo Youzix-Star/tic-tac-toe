@@ -1,24 +1,27 @@
 // 联机管理器：负责 WebSocket 通信、房间管理
 export class OnlineManager {
-    constructor(onGameStart, onMove, onOpponentMove, onGameEnd, onError) {
+    constructor(onGameStart, onMove, onOpponentMove, onGameEnd, onReset, onError) {
         this.ws = null;
         this.roomId = null;
         this.playerRole = null; // 'X' 或 'O'
-        this.onGameStart = onGameStart;
-        this.onMove = onMove;       // 本地移动时调用（可选）
-        this.onOpponentMove = onOpponentMove;
-        this.onGameEnd = onGameEnd;
-        this.onError = onError;
+        this.isConnected = false;
+        // 回调
+        this.onGameStart = onGameStart;   // (role) => {}
+        this.onMove = onMove;             // (index, player) => {} 本地移动后调用（可选）
+        this.onOpponentMove = onOpponentMove; // (index, player) => {} 对手移动
+        this.onGameEnd = onGameEnd;       // (winner, reason) => {}
+        this.onReset = onReset;           // () => {} 对手请求重置
+        this.onError = onError;           // (msg) => {}
     }
 
-    // 获取 API 基础 URL（指向你的 Worker 后端）
+    // 后端 API 地址（请替换为你的 Worker 实际域名）
     getApiBase() {
+        // 注意：部署时需要修改为你的 Worker 域名，例如 'https://your-worker.workers.dev'
         return 'https://tic-tac-toe-backend.wxd1y12r.workers.dev';
     }
 
-    // 获取 WebSocket 基础 URL
     getWsBase() {
-        return 'wss://tic-tac-toe-backend.wxd1y12r.workers.dev';
+        return this.getApiBase().replace('https://', 'wss://');
     }
 
     // 创建房间
@@ -68,6 +71,7 @@ export class OnlineManager {
             this.ws = new WebSocket(wsUrl);
             this.ws.onopen = () => {
                 console.log('WebSocket 已连接');
+                this.isConnected = true;
                 resolve();
             };
             this.ws.onmessage = (event) => {
@@ -76,11 +80,13 @@ export class OnlineManager {
             };
             this.ws.onerror = (err) => {
                 console.error('WebSocket 错误', err);
+                this.isConnected = false;
                 this.onError?.('连接失败，请重试');
                 reject(err);
             };
             this.ws.onclose = () => {
                 console.log('WebSocket 断开');
+                this.isConnected = false;
                 this.onError?.('连接已断开');
             };
         });
@@ -93,16 +99,20 @@ export class OnlineManager {
                 this.onGameStart?.(this.playerRole);
                 break;
             case 'move':
-                this.onOpponentMove?.(msg.index);
+                // 广播移动，包含 player 角色
+                this.onOpponentMove?.(msg.index, msg.player);
                 break;
             case 'game_end':
                 this.onGameEnd?.(msg.winner, msg.reason);
+                break;
+            case 'reset_game':
+                this.onReset?.();
                 break;
             case 'error':
                 this.onError?.(msg.message);
                 break;
             default:
-                break;
+                console.warn('未知消息类型:', msg);
         }
     }
 
@@ -113,8 +123,21 @@ export class OnlineManager {
         }
     }
 
+    // 请求重置游戏
+    sendReset() {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'reset' }));
+        }
+    }
+
     // 断开连接
     disconnect() {
-        if (this.ws) this.ws.close();
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+        }
+        this.isConnected = false;
+        this.roomId = null;
+        this.playerRole = null;
     }
     }
