@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>PureCard UI · Tic-Tac-Toe</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="game-container">
+    <div class="game-header">
+        <h1>井字棋</h1>
+        <div class="mode-slider-container" id="modeSlider">
+            <div class="mode-slider-bg"></div>
+            <div class="mode-slider-options">
+                <div class="mode-option" data-mode="twoPlayer">👥 双人对战</div>
+                <div class="mode-option" data-mode="vsAI">🤖 人机对战</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="action-group">
+        <button class="reset-btn" id="resetGameBtn">⟳ 新对局</button>
+        <button class="ai-first-btn" id="aiFirstBtn" style="display: none;">🤖 AI 先手</button>
+    </div>
+
+    <div class="status-area">
+        <div class="turn-indicator">
+            <span class="turn-label">当前玩家</span>
+            <div class="players-slider-container" id="playerSlider">
+                <div class="slider-bg"></div>
+                <div class="slider-options">
+                    <div class="player-option x-opt">X</div>
+                    <div class="player-option o-opt">O</div>
+                </div>
+            </div>
+        </div>
+        <div class="status-message" id="statusMsg">等待落子</div>
+    </div>
+
+    <div class="board" id="board"></div>
+    <div class="footer-note">✧ PureCard UI ✧</div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
