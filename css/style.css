@@ -60,7 +60,7 @@ h1::before {
     background: #e8eaed;
     border-radius: 48px;
     padding: 4px;
-    width: 210px;
+    width: 280px;
     position: relative;
     display: flex;
     cursor: default;
@@ -89,7 +89,8 @@ h1::before {
     gap: 6px;
 }
 .mode-slider-container.active-twoPlayer .mode-option[data-mode="twoPlayer"],
-.mode-slider-container.active-vsAI .mode-option[data-mode="vsAI"] {
+.mode-slider-container.active-vsAI .mode-option[data-mode="vsAI"],
+.mode-slider-container.active-online .mode-option[data-mode="online"] {
     color: #ffffff;
     text-shadow: 0 1px 2px rgba(0,0,0,0.1);
     font-weight: 600;
@@ -98,7 +99,7 @@ h1::before {
     position: absolute;
     top: 4px;
     left: 4px;
-    width: calc(50% - 4px);
+    width: calc(33.33% - 4px);
     height: calc(100% - 8px);
     background: #1a73e8;
     border-radius: 40px;
@@ -108,6 +109,9 @@ h1::before {
 }
 .mode-slider-container.active-vsAI .mode-slider-bg {
     transform: translateX(100%);
+}
+.mode-slider-container.active-online .mode-slider-bg {
+    transform: translateX(200%);
 }
 .mode-slider-container.active-twoPlayer .mode-slider-bg {
     transform: translateX(0%);
@@ -321,7 +325,7 @@ h1::before {
         width: 120px;
     }
     .mode-slider-container {
-        width: 180px;
+        width: 240px;
     }
     .status-message {
         font-size: 0.7rem;
@@ -334,4 +338,49 @@ h1::before {
 }
 .board-refresh {
     animation: gentlePop 0.2s ease-out;
-      }
+}
+
+/* 联机面板样式 */
+#onlinePanel {
+    margin-top: 16px;
+    padding: 12px;
+    background: #f1f3f4;
+    border-radius: 24px;
+}
+#onlinePanel input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 40px;
+    border: 1px solid #dadce0;
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+#onlinePanel button {
+    background: rgba(26, 115, 232, 0.08);
+    border: none;
+    font-family: 'Roboto', sans-serif;
+    font-weight: 500;
+    font-size: 0.85rem;
+    padding: 8px 18px;
+    border-radius: 40px;
+    color: #1a73e8;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+#onlinePanel button:hover {
+    background: rgba(26, 115, 232, 0.16);
+    transform: scale(0.97);
+}
+#onlineRoomDisplay {
+    font-size: 0.9rem;
+    color: #1a73e8;
+    margin-top: 8px;
+}
+#onlineStatus {
+    font-size: 0.8rem;
+    color: #5f6368;
+    margin-top: 4px;
+    }
