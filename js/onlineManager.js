@@ -11,16 +11,14 @@ export class OnlineManager {
         this.onError = onError;
     }
 
-    // 获取 API 基础 URL（根据当前页面自动适配）
+    // 获取 API 基础 URL（指向你的 Worker 后端）
     getApiBase() {
-        // 如果是本地开发或 Pages 部署，使用相对路径；也可以写死 Worker 地址
-        // 这里使用相对路径，假设 Worker 与前端同域（通过 Pages Functions 代理）
-        return '';
+        return 'https://tic-tac-toe-backend.wxd1y12r.workers.dev';
     }
 
+    // 获取 WebSocket 基础 URL
     getWsBase() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        return `${protocol}//${window.location.host}`;
+        return 'wss://tic-tac-toe-backend.wxd1y12r.workers.dev';
     }
 
     // 创建房间
@@ -91,11 +89,10 @@ export class OnlineManager {
     handleMessage(msg) {
         switch (msg.type) {
             case 'game_start':
-                this.playerRole = msg.role; // 'X' 或 'O'
+                this.playerRole = msg.role;
                 this.onGameStart?.(this.playerRole);
                 break;
             case 'move':
-                // 对手落子
                 this.onOpponentMove?.(msg.index);
                 break;
             case 'game_end':
@@ -120,4 +117,4 @@ export class OnlineManager {
     disconnect() {
         if (this.ws) this.ws.close();
     }
-}
+    }
