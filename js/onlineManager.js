@@ -5,20 +5,32 @@ export class OnlineManager {
         this.roomId = null;
         this.playerRole = null; // 'X' 或 'O'
         this.onGameStart = onGameStart;
-        this.onMove = onMove;       // 收到对手移动时回调 (index)
+        this.onMove = onMove;       // 本地移动时调用（可选）
         this.onOpponentMove = onOpponentMove;
         this.onGameEnd = onGameEnd;
         this.onError = onError;
     }
 
+    // 获取 API 基础 URL（根据当前页面自动适配）
+    getApiBase() {
+        // 如果是本地开发或 Pages 部署，使用相对路径；也可以写死 Worker 地址
+        // 这里使用相对路径，假设 Worker 与前端同域（通过 Pages Functions 代理）
+        return '';
+    }
+
+    getWsBase() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${protocol}//${window.location.host}`;
+    }
+
     // 创建房间
     async createRoom(playerName = 'Player') {
         try {
-            const resp = await fetch('/api/create', { method: 'POST' });
+            const resp = await fetch(`${this.getApiBase()}/api/create`, { method: 'POST' });
             const data = await resp.json();
             if (data.roomId) {
                 this.roomId = data.roomId;
-                await this.connectWebSocket(data.roomId, 'X', playerName);
+                await this.connectWebSocket(this.roomId, 'X', playerName);
                 return data.roomId;
             } else {
                 throw new Error('创建房间失败');
@@ -32,7 +44,7 @@ export class OnlineManager {
     // 加入房间
     async joinRoom(roomId, playerName = 'Player') {
         try {
-            const resp = await fetch('/api/join', {
+            const resp = await fetch(`${this.getApiBase()}/api/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ roomId })
@@ -54,7 +66,7 @@ export class OnlineManager {
     // 建立 WebSocket 连接
     connectWebSocket(roomId, role, playerName) {
         return new Promise((resolve, reject) => {
-            const wsUrl = `wss://${window.location.host}/api/ws?roomId=${roomId}&role=${role}&name=${encodeURIComponent(playerName)}`;
+            const wsUrl = `${this.getWsBase()}/api/ws?roomId=${roomId}&role=${role}&name=${encodeURIComponent(playerName)}`;
             this.ws = new WebSocket(wsUrl);
             this.ws.onopen = () => {
                 console.log('WebSocket 已连接');
@@ -108,4 +120,4 @@ export class OnlineManager {
     disconnect() {
         if (this.ws) this.ws.close();
     }
-              }
+}
