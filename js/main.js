@@ -70,8 +70,8 @@ function handleGameEnd(status) {
     ui.setGameActive(false);
 }
 
-// 尝试落子（本地）
-function tryMove(index, playerSymbol, fromOnline = false) {
+// 本地落子（不通过网络发送，用于双人/人机）
+function tryLocalMove(index, playerSymbol) {
     if (!gameActive) return false;
     if ((playerSymbol === 'X' && !isXTurn) || (playerSymbol === 'O' && isXTurn)) return false;
     if (!makeMove(board, index, playerSymbol)) return false;
@@ -90,13 +90,61 @@ function tryMove(index, playerSymbol, fromOnline = false) {
     return true;
 }
 
+// 联机模式：应用对手移动（直接更新状态，不发送网络消息）
+function applyOpponentMove(index, player) {
+    if (!gameActive) return;
+    // 验证合法性
+    if (board[index] !== null) return;
+    if (player !== (isXTurn ? 'X' : 'O')) {
+        // 回合不匹配，可能因网络延迟忽略
+        console.warn('对手移动回合错误', player, isXTurn);
+        return;
+    }
+    makeMove(board, index, player);
+    ui.updateBoardUI(board);
+    ui.animateCell(index);
+
+    const status = checkGameStatus(board);
+    if (status.type !== 'continue') {
+        handleGameEnd(status);
+        return;
+    }
+
+    isXTurn = !isXTurn;
+    updateUIForState();
+}
+
+// 联机模式：本地玩家落子并发送
+function tryOnlineMove(index) {
+    if (!gameActive) return false;
+    const currentPlayer = isXTurn ? 'X' : 'O';
+    if (currentPlayer !== localPlayerRole) return false;
+    if (!makeMove(board, index, currentPlayer)) return false;
+
+    ui.updateBoardUI(board);
+    ui.animateCell(index);
+
+    const status = checkGameStatus(board);
+    if (status.type !== 'continue') {
+        handleGameEnd(status);
+        onlineManager.sendMove(index); // 仍然发送最后一步
+        return true;
+    }
+
+    isXTurn = !isXTurn;
+    updateUIForState();
+    // 发送移动到服务器
+    onlineManager.sendMove(index);
+    return true;
+}
+
 // AI 落子（人机模式）
 function aiMove() {
     clearAITimer();
     if (!gameActive || gameMode !== 'vsAI' || isXTurn === true) return;
     const aiIndex = getBestAIMove(board, 'O', 'X');
     if (aiIndex !== -1 && board[aiIndex] === null) {
-        tryMove(aiIndex, 'O');
+        tryLocalMove(aiIndex, 'O');
     }
 }
 
@@ -108,10 +156,9 @@ function triggerAIMove() {
     aiTimer = setTimeout(() => aiMove(), 50);
 }
 
-// 重置游戏
-function resetGame(aiFirst = false) {
+// 重置本地游戏（双人/人机模式）
+function resetLocalGame(aiFirst = false) {
     clearAITimer();
-    if (onlineManager) onlineManager.disconnect();
     board.fill(null);
     gameActive = true;
     winnerCombo = null;
@@ -138,19 +185,44 @@ function resetGame(aiFirst = false) {
             ui.setStatusMessage('🧑 你先手 (X) · 点击格子开始');
             ui.updatePlayerSlider('X');
         }
-    } else if (gameMode === 'online') {
-        // 联机模式重置由房间逻辑控制，这里只清空界面
-        ui.setStatusMessage('等待联机对局开始...');
-        ui.updatePlayerSlider('X');
-        isXTurn = true;
-        localPlayerRole = null;
     }
     ui.refreshBoardAnimation();
+}
+
+// 联机模式重置（由后端广播触发）
+function resetOnlineGame() {
+    board.fill(null);
+    gameActive = true;
+    winnerCombo = null;
+    isXTurn = true;  // X 总是先手
+    ui.clearHighlights();
+    ui.updateBoardUI(board);
+    ui.setGameActive(true);
+    ui.updatePlayerSlider('X');
+    ui.setStatusMessage(`🔄 游戏已重置，X 先手 (你是 ${localPlayerRole})`);
+}
+
+// 重置入口（根据模式不同行为）
+function resetGame(aiFirst = false) {
+    if (gameMode === 'online') {
+        if (onlineManager && onlineManager.isConnected) {
+            onlineManager.sendReset();
+        } else {
+            ui.setStatusMessage('未连接，无法重置');
+        }
+    } else {
+        resetLocalGame(aiFirst);
+    }
 }
 
 // 切换模式
 function setGameMode(mode) {
     if (mode === gameMode) return;
+    // 清理联机资源
+    if (onlineManager) {
+        onlineManager.disconnect();
+        onlineManager = null;
+    }
     gameMode = mode;
     ui.updateModeSlider(mode);
     ui.setAIButtonVisible(mode === 'vsAI');
@@ -158,7 +230,17 @@ function setGameMode(mode) {
     if (onlinePanel) {
         onlinePanel.style.display = mode === 'online' ? 'block' : 'none';
     }
-    resetGame(false);
+    if (mode === 'online') {
+        // 联机模式不自动重置，等待用户操作
+        board.fill(null);
+        gameActive = false;
+        ui.setGameActive(false);
+        ui.updateBoardUI(board);
+        ui.setStatusMessage('请创建或加入房间');
+        localPlayerRole = null;
+    } else {
+        resetLocalGame(false);
+    }
 }
 
 // 点击格子
@@ -166,25 +248,17 @@ function onCellClick(index) {
     if (!gameActive) return;
     if (gameMode === 'twoPlayer') {
         const currentPlayer = isXTurn ? 'X' : 'O';
-        tryMove(index, currentPlayer);
+        tryLocalMove(index, currentPlayer);
     } else if (gameMode === 'vsAI') {
         if (isXTurn === true && board[index] === null) {
-            if (tryMove(index, 'X')) triggerAIMove();
+            if (tryLocalMove(index, 'X')) triggerAIMove();
         }
     } else if (gameMode === 'online') {
-        if (localPlayerRole === 'X' && isXTurn && board[index] === null) {
-            if (tryMove(index, 'X')) {
-                onlineManager.sendMove(index);
-            }
-        } else if (localPlayerRole === 'O' && !isXTurn && board[index] === null) {
-            if (tryMove(index, 'O')) {
-                onlineManager.sendMove(index);
-            }
-        }
+        tryOnlineMove(index);
     }
 }
 
-// 联机相关 UI 和逻辑
+// 初始化联机面板与事件
 function initOnlineMode() {
     const createBtn = document.getElementById('onlineCreateBtn');
     const joinBtn = document.getElementById('onlineJoinBtn');
@@ -205,14 +279,14 @@ function initOnlineMode() {
                 ui.updateBoardUI(board);
                 ui.clearHighlights();
                 ui.setGameActive(true);
-                updateUIForState();
-                statusSpan.innerText = `游戏开始，你是 ${role}`;
+                ui.updatePlayerSlider('X');
+                ui.setStatusMessage(`游戏开始！你是 ${role}，X 先手`);
+                statusSpan.innerText = `游戏中，你是 ${role}`;
                 roomDisplay.innerText = `房间号: ${onlineManager.roomId}`;
             },
-            (index) => { /* onMove 本地移动时已处理 */ },
-            (index) => { // onOpponentMove
-                const opponentSymbol = localPlayerRole === 'X' ? 'O' : 'X';
-                tryMove(index, opponentSymbol, true);
+            (index, player) => { /* 可选：本地移动回调 */ },
+            (index, player) => { // onOpponentMove
+                applyOpponentMove(index, player);
             },
             (winner, reason) => { // onGameEnd
                 gameActive = false;
@@ -220,8 +294,16 @@ function initOnlineMode() {
                 if (winner === 'draw') ui.setStatusMessage('🤝 平局！');
                 else if (winner === localPlayerRole) ui.setStatusMessage('🎉 你赢了！ 🎉');
                 else ui.setStatusMessage('😭 你输了 ...');
+                statusSpan.innerText = `游戏结束，${winner === 'draw' ? '平局' : (winner === localPlayerRole ? '胜利' : '失败')}`;
             },
-            (err) => { ui.setStatusMessage(`错误: ${err}`); }
+            () => { // onReset
+                resetOnlineGame();
+                statusSpan.innerText = `游戏已重置，你是 ${localPlayerRole}`;
+            },
+            (err) => {
+                ui.setStatusMessage(`错误: ${err}`);
+                statusSpan.innerText = `错误: ${err}`;
+            }
         );
     };
 
@@ -231,6 +313,7 @@ function initOnlineMode() {
         if (roomId) {
             roomDisplay.innerText = `房间号: ${roomId}`;
             statusSpan.innerText = '等待对手加入...';
+            ui.setStatusMessage('等待对手加入...');
         } else {
             statusSpan.innerText = '创建失败';
         }
@@ -244,6 +327,7 @@ function initOnlineMode() {
         if (success) {
             roomDisplay.innerText = `房间号: ${roomId}`;
             statusSpan.innerText = '已加入房间，等待开始...';
+            ui.setStatusMessage('已加入房间，等待对手...');
         } else {
             statusSpan.innerText = '加入失败，房间不存在或已满';
         }
