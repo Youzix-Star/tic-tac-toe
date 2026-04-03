@@ -55,12 +55,11 @@ export class UIManager {
         else if (currentPlayerSymbol === 'O') this.playerSlider.classList.add('active-o');
     }
 
-    // 更新模式胶囊（双人/人机/联机）
+    // 更新模式胶囊（双人/人机）
     updateModeSlider(mode) {
-        this.modeSlider.classList.remove('active-twoPlayer', 'active-vsAI', 'active-online');
+        this.modeSlider.classList.remove('active-twoPlayer', 'active-vsAI');
         if (mode === 'twoPlayer') this.modeSlider.classList.add('active-twoPlayer');
-        else if (mode === 'vsAI') this.modeSlider.classList.add('active-vsAI');
-        else if (mode === 'online') this.modeSlider.classList.add('active-online');
+        else this.modeSlider.classList.add('active-vsAI');
     }
 
     // 设置状态栏消息
