@@ -16,15 +16,23 @@ let localPlayerRole = null;   // 联机模式下当前玩家的角色 'X' 或 'O
 const ui = new UIManager();
 
 // 辅助函数
-function clearAITimer() { if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; } }
+function clearAITimer() {
+    if (aiTimer) {
+        clearTimeout(aiTimer);
+        aiTimer = null;
+    }
+}
 
 function updateUIForState() {
     if (!gameActive) return;
     const currentPlayer = isXTurn ? 'X' : 'O';
     ui.updatePlayerSlider(currentPlayer);
     if (gameMode === 'vsAI') {
-        if (!isXTurn) ui.setStatusMessage('🤖 AI (O) 思考中 ...');
-        else ui.setStatusMessage('🧑 轮到你了 (X)');
+        if (!isXTurn) {
+            ui.setStatusMessage('🤖 AI (O) 思考中 ...');
+        } else {
+            ui.setStatusMessage('🧑 轮到你了 (X)');
+        }
     } else if (gameMode === 'twoPlayer') {
         ui.setStatusMessage(`🎲 轮到 ${currentPlayer} 落子`);
     } else if (gameMode === 'online') {
@@ -45,11 +53,13 @@ function handleGameEnd(status) {
         const winnerSymbol = status.winner;
         let msg = '';
         if (gameMode === 'vsAI') {
-            msg = winnerSymbol === 'X' ? '🎉 恭喜你获胜！ 🎉' : '🤖 AI 获胜了 ... 再来一局？';
+            if (winnerSymbol === 'X') msg = '🎉 恭喜你获胜！ 🎉';
+            else msg = '🤖 AI 获胜了 ... 再来一局？';
         } else if (gameMode === 'twoPlayer') {
             msg = `🏆 玩家 ${winnerSymbol} 获胜！ 🏆`;
         } else if (gameMode === 'online') {
             if (winnerSymbol === localPlayerRole) msg = '🎉 你赢了！ 🎉';
+            else if (winnerSymbol === 'draw') msg = '🤝 平局！';
             else msg = '😭 你输了 ... 再来一局？';
         }
         ui.setStatusMessage(msg);
@@ -81,8 +91,22 @@ function tryMove(index, playerSymbol, fromOnline = false) {
 }
 
 // AI 落子（人机模式）
-function aiMove() { /* 与原代码相同 */ }
-function triggerAIMove() { /* 与原代码相同 */ }
+function aiMove() {
+    clearAITimer();
+    if (!gameActive || gameMode !== 'vsAI' || isXTurn === true) return;
+    const aiIndex = getBestAIMove(board, 'O', 'X');
+    if (aiIndex !== -1 && board[aiIndex] === null) {
+        tryMove(aiIndex, 'O');
+    }
+}
+
+function triggerAIMove() {
+    if (gameMode !== 'vsAI') return;
+    if (!gameActive) return;
+    if (isXTurn === true) return;
+    clearAITimer();
+    aiTimer = setTimeout(() => aiMove(), 50);
+}
 
 // 重置游戏
 function resetGame(aiFirst = false) {
@@ -104,7 +128,11 @@ function resetGame(aiFirst = false) {
             isXTurn = false;
             ui.setStatusMessage('🤖 AI 先手 (O) · 轮到AI思考');
             ui.updatePlayerSlider('O');
-            setTimeout(() => { if (gameActive && gameMode === 'vsAI' && !isXTurn && board.every(v => v === null)) aiMove(); }, 80);
+            setTimeout(() => {
+                if (gameActive && gameMode === 'vsAI' && !isXTurn && board.every(v => v === null)) {
+                    aiMove();
+                }
+            }, 80);
         } else {
             isXTurn = true;
             ui.setStatusMessage('🧑 你先手 (X) · 点击格子开始');
@@ -113,7 +141,7 @@ function resetGame(aiFirst = false) {
     } else if (gameMode === 'online') {
         // 联机模式重置由房间逻辑控制，这里只清空界面
         ui.setStatusMessage('等待联机对局开始...');
-        ui.updatePlayerSlider('X'); // 占位
+        ui.updatePlayerSlider('X');
         isXTurn = true;
         localPlayerRole = null;
     }
@@ -126,8 +154,10 @@ function setGameMode(mode) {
     gameMode = mode;
     ui.updateModeSlider(mode);
     ui.setAIButtonVisible(mode === 'vsAI');
-    // 隐藏联机相关UI元素（稍后添加）
-    document.getElementById('onlinePanel').style.display = mode === 'online' ? 'flex' : 'none';
+    const onlinePanel = document.getElementById('onlinePanel');
+    if (onlinePanel) {
+        onlinePanel.style.display = mode === 'online' ? 'block' : 'none';
+    }
     resetGame(false);
 }
 
@@ -162,12 +192,15 @@ function initOnlineMode() {
     const roomDisplay = document.getElementById('onlineRoomDisplay');
     const statusSpan = document.getElementById('onlineStatus');
 
-    createBtn.onclick = async () => {
-        if (!onlineManager) onlineManager = new OnlineManager(
+    if (!createBtn || !joinBtn) return;
+
+    const createOnlineManager = () => {
+        if (onlineManager) onlineManager.disconnect();
+        onlineManager = new OnlineManager(
             (role) => { // onGameStart
                 localPlayerRole = role;
                 gameActive = true;
-                isXTurn = true; // 总是 X 先手
+                isXTurn = true;
                 board.fill(null);
                 ui.updateBoardUI(board);
                 ui.clearHighlights();
@@ -190,6 +223,10 @@ function initOnlineMode() {
             },
             (err) => { ui.setStatusMessage(`错误: ${err}`); }
         );
+    };
+
+    createBtn.onclick = async () => {
+        createOnlineManager();
         const roomId = await onlineManager.createRoom();
         if (roomId) {
             roomDisplay.innerText = `房间号: ${roomId}`;
@@ -202,7 +239,7 @@ function initOnlineMode() {
     joinBtn.onclick = async () => {
         const roomId = roomIdInput.value.trim();
         if (!roomId) return;
-        if (!onlineManager) onlineManager = new OnlineManager(/* 同上回调 */);
+        createOnlineManager();
         const success = await onlineManager.joinRoom(roomId);
         if (success) {
             roomDisplay.innerText = `房间号: ${roomId}`;
@@ -219,7 +256,7 @@ function init() {
     ui.bindReset(() => resetGame(false));
     ui.bindAIFirst(() => { if (gameMode === 'vsAI') resetGame(true); });
 
-    // 模式切换
+    // 模式切换监听
     document.querySelectorAll('.mode-option').forEach(opt => {
         opt.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -228,20 +265,18 @@ function init() {
         });
     });
 
-    // 添加联机面板到 DOM（稍后会在 HTML 中添加）
+    // 添加联机面板到 DOM
     const onlinePanel = document.createElement('div');
     onlinePanel.id = 'onlinePanel';
     onlinePanel.style.display = 'none';
     onlinePanel.innerHTML = `
-        <div style="margin-top: 16px; padding: 12px; background: #f1f3f4; border-radius: 24px;">
-            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                <input type="text" id="onlineRoomId" placeholder="输入房间号" style="flex:1; padding: 8px 12px; border-radius: 40px; border: 1px solid #dadce0;">
-                <button id="onlineJoinBtn" class="reset-btn">加入房间</button>
-                <button id="onlineCreateBtn" class="reset-btn">创建房间</button>
-            </div>
-            <div id="onlineRoomDisplay" style="font-size:0.9rem; color:#1a73e8;"></div>
-            <div id="onlineStatus" style="font-size:0.8rem; color:#5f6368;"></div>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="onlineRoomId" placeholder="输入房间号" style="flex:1; padding: 8px 12px; border-radius: 40px; border: 1px solid #dadce0;">
+            <button id="onlineJoinBtn" class="reset-btn">加入房间</button>
+            <button id="onlineCreateBtn" class="reset-btn">创建房间</button>
         </div>
+        <div id="onlineRoomDisplay" style="font-size:0.9rem; color:#1a73e8;"></div>
+        <div id="onlineStatus" style="font-size:0.8rem; color:#5f6368;"></div>
     `;
     document.querySelector('.game-container').appendChild(onlinePanel);
     initOnlineMode();
